@@ -1,6 +1,7 @@
 #include <msp430.h>
 #include <lcdutils.h>
 #include <lcddraw.h>
+#include <clocksTimer.h>
 
 // Paddle and ball positions
 int paddle1Y = screenHeight / 2 - 20;  // Initial y-coordinate for the center of paddle 1
