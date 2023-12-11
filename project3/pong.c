@@ -1,86 +1,175 @@
 #include <msp430.h>
-#include <lcdutils.h>
-#include <lcddraw.h>
-#include <clocksTimer.h>
+#include <libTimer.h>
+#include "lcdutils.h"
+#include "lcddraw.h"
 
-// Paddle and ball positions
-int paddle1Y = screenHeight / 2 - 20;  // Initial y-coordinate for the center of paddle 1
-int paddle2Y = screenHeight / 2 - 20;  // Initial y-coordinate for the center of paddle 2
-int ballX = screenWidth / 2;           // Initial x-coordinate for the ball
-int ballY = screenHeight / 2;          // Initial y-coordinate for the ball
+// WARNING: LCD DISPLAY USES P1.0.  Do not touch!!!
 
-// Paddle and ball dimensions
-int paddleWidth = 5;
-int paddleHeight = 40;
-int ballSize = 5;
+#define LED BIT6 /* note that bit zero req'd for display */
 
-// Ball velocity
-int ballVelocityX = 2;
-int ballVelocityY = 1;
+#define SW1 1
+#define SW2 2
+#define SW3 4
+#define SW4 8
 
-// Function to initialize the LCD and set up any necessary configurations
-void lcd_init_setup() {
-    // Initialization code for the LCD
+#define SWITCHES 15
+
+char blue = 31, green = 0, red = 31;
+unsigned char step = 0;
+
+static char switch_update_interrupt_sense()
+{
+    char p2val = P2IN;
+    P2IES |= (p2val & SWITCHES);
+    P2IES &= (p2val | ~SWITCHES);
+    return p2val;
+}
+
+void switch_init()
+{
+    P2REN |= SWITCHES;
+    P2IE |= SWITCHES;
+    P2OUT |= SWITCHES;
+    P2DIR &= ~SWITCHES;
+    switch_update_interrupt_sense();
+}
+
+int switches = 0;
+
+void switch_interrupt_handler()
+{
+    char p2val = switch_update_interrupt_sense();
+    switches = ~p2val & SWITCHES;
+}
+
+short drawPos[2] = {1, 10}, controlPos[2] = {2, 10};
+short colVelocity = 1, colLimits[2] = {1, screenWidth / 2};
+
+void draw_ball(int col, int row, unsigned short color)
+{
+    fillRectangle(col - 1, row - 1, 3, 3, color);
+}
+
+void screen_update_ball()
+{
+    for (char axis = 0; axis < 2; axis++)
+        if (drawPos[axis] != controlPos[axis])
+            goto redraw;
+    return;
+redraw:
+    draw_ball(drawPos[0], drawPos[1], COLOR_BLUE);
+    for (char axis = 0; axis < 2; axis++)
+        drawPos[axis] = controlPos[axis];
+    draw_ball(drawPos[0], drawPos[1], COLOR_WHITE);
+}
+
+short redrawScreen = 1;
+u_int controlFontColor = COLOR_GREEN;
+
+void wdt_c_handler()
+{
+    static int secCount = 0;
+
+    secCount++;
+    if (secCount >= 25)
+    {
+        {
+            short oldCol = controlPos[0];
+            short newCol = oldCol + colVelocity;
+            if (newCol <= colLimits[0] || newCol >= colLimits[1])
+                colVelocity = -colVelocity;
+            else
+                controlPos[0] = newCol;
+        }
+
+        {
+            if (switches & SW3)
+                green = (green + 1) % 64;
+            if (switches & SW2)
+                blue = (blue + 2) % 32;
+            if (switches & SW1)
+                red = (red - 3) % 32;
+            if (step <= 30)
+                step++;
+            else
+                step = 0;
+            secCount = 0;
+        }
+        if (switches & SW4)
+            return;
+        redrawScreen = 1;
+    }
+}
+
+void update_shape();
+
+void main()
+{
+    P1DIR |= LED;
+    P1OUT |= LED;
     configureClocks();
     lcd_init();
-}
+    switch_init();
 
-// Function to update the game state
-void update_game_state() {
-    // Update paddles
-    if (paddle1Y < 0) paddle1Y = 0;
-    if (paddle1Y > screenHeight - paddleHeight) paddle1Y = screenHeight - paddleHeight;
+    enableWDTInterrupts();
 
-    if (paddle2Y < 0) paddle2Y = 0;
-    if (paddle2Y > screenHeight - paddleHeight) paddle2Y = screenHeight - paddleHeight;
+    or_sr(0x8);
 
-    // Update ball
-    ballX += ballVelocityX;
-    ballY += ballVelocityY;
-
-    // Simple ball collision with top and bottom of the screen
-    if (ballY - ballSize / 2 <= 0 || ballY + ballSize / 2 >= screenHeight) {
-        ballVelocityY = -ballVelocityY;  // Reverse the vertical velocity
-    }
-
-    // Ball collision with paddles
-    if ((ballX - ballSize / 2 <= paddleWidth) &&
-        (ballY >= paddle1Y - paddleHeight / 2) &&
-        (ballY <= paddle1Y + paddleHeight / 2)) {
-        ballVelocityX = -ballVelocityX;  // Reverse the horizontal velocity
-    }
-
-    if ((ballX + ballSize / 2 >= screenWidth - paddleWidth) &&
-        (ballY >= paddle2Y - paddleHeight / 2) &&
-        (ballY <= paddle2Y + paddleHeight / 2)) {
-        ballVelocityX = -ballVelocityX;  // Reverse the horizontal velocity
+    clearScreen(COLOR_BLUE);
+    while (1)
+    {
+        if (redrawScreen)
+        {
+            redrawScreen = 0;
+            update_shape();
+        }
+        P1OUT &= ~LED;
+        or_sr(0x10);
+        P1OUT |= LED;
     }
 }
 
-// Function to draw the paddles and ball on the LCD
-void draw_game() {
-    clearScreen(COLOR_BLACK);  // Clear the screen
+void screen_update_hourglass()
+{
+    static unsigned char row = screenHeight / 2, col = screenWidth / 2;
+    static char lastStep = 0;
 
-    // Draw paddles and ball
-    fillRectangle(0, paddle1Y - paddleHeight / 2, paddleWidth, paddleHeight, COLOR_WHITE);  // Paddle 1
-    fillRectangle(screenWidth - paddleWidth, paddle2Y - paddleHeight / 2, paddleWidth, paddleHeight, COLOR_WHITE);  // Paddle 2
-    fillRectangle(ballX - ballSize / 2, ballY - ballSize / 2, ballSize, ballSize, COLOR_WHITE);  // Ball
-}
+    if (step == 0 || (lastStep > step))
+    {
+        clearScreen(COLOR_BLUE);
+        lastStep = 0;
+    }
+    else
+    {
+        for (; lastStep <= step; lastStep++)
+        {
+            int startCol = col - lastStep;
+            int endCol = col + lastStep;
+            int width = 1 + endCol - startCol;
 
-// Main function
-void main() {
-    // Initialize the LCD
-    lcd_init_setup();
+            unsigned int color = (blue << 11) | (green << 5) | red;
 
-    // Main game loop
-    while (1) {
-        // Update game state
-        update_game_state();
-
-        // Draw the game on the LCD
-        draw_game();
-
-        // Delay for a short period to control the game speed
-        __delay_cycles(10000);
+            fillRectangle(startCol, row + lastStep, width, 1, color);
+            fillRectangle(startCol, row - lastStep, width, 1, color);
+        }
     }
 }
+
+void update_shape()
+{
+    screen_update_ball();
+    screen_update_hourglass();
+}
+
+__interrupt_vec(PORT2_VECTOR) Port_2()
+{
+    if (P2IFG & SWITCHES)
+    {
+        P2IFG &= ~SWITCHES;
+        switch_interrupt_handler();
+    }
+}
+
+__interrupt_vec(WDT_VECTOR) WDT_ISR()
+{
+    // Empty ISR since the actual WDT
