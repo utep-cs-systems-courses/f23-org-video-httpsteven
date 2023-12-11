@@ -169,6 +169,7 @@ void main() {
     // did ball exit the field?
     if (ball_pos[1] <= 0 || ball_pos[1] + ball_dims[1] >= display_dims[1]) {
       clearScreen(COLOR_RED);
+      ball_pos[1] = display_dims[1]/2;
       goto Top;
     }
 
