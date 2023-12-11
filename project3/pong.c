@@ -116,19 +116,8 @@ int boxesCollide(int b1pos[], int b1dims[], int b2pos[], int b2dims[]) {
   return horiz_overlap && vert_overlap;
 }
 
-void reset_game_state() {
-  clearScreen(COLOR_BLACK);
-
-  // Reset paddles and ball positions
-  init_paddle(t_paddle_pos, 98, 10);
-  init_paddle(b_paddle_pos, 0, 145);
-  init_paddle(ball_pos, 20, 20);
-
-  // Redraw game objects
-  draw_game_objects();
-}
-
 void main() {
+  Top:
   configureClocks();
   lcd_init();
   switch_init();
@@ -161,9 +150,9 @@ void main() {
 
     // is ball hitting a wall
     if ((ball_pos[0] <= 0) || (ball_pos[0] + ball_dims[0] >= display_dims[0])) {
-       ball_dir[0] = -ball_dir[0];
-       reset_game_state();  // Call the function to reset the game state
-}
+      ball_dir[0] = -ball_dir[0];
+      // TODO: beep
+    }
     
     if ( // is ball hitting bottom paddle?
       boxesCollide(b_paddle_pos, paddle_dims, ball_pos, ball_dims)
@@ -179,7 +168,8 @@ void main() {
 
     // did ball exit the field?
     if (ball_pos[1] <= 0 || ball_pos[1] + ball_dims[1] >= display_dims[1]) {
-    reset_game_state();
+      clearScreen(COLOR_RED);
+      goto Top
     }
 
     // did top paddle hit the edge?
@@ -190,6 +180,7 @@ void main() {
     // did bottom paddle git the edge?
     if (b_paddle_pos[0] <= 0 || b_paddle_pos[0] + paddle_dims[0] >= display_dims[0]) {
       b_paddle_dir[0] = 0;
+      }
     }
   }
 }
