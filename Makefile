@@ -2,6 +2,7 @@ all:
 	(cd timerLib; make install)
 	(cd lcdLib; make install)
 	(cd wakedemo; make)
+	(cd wakedemo; make)
 #	(cd circledemo; make)
 
 doc:

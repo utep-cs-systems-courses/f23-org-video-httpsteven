@@ -13,7 +13,7 @@ COMMON_OBJECTS = lcdutils.o lcddraw.o
 all: pong.elf
 
 # Additional rules for files
-pong.elf: ${COMMON_OBJECTS} main.o
+pong.elf: ${COMMON_OBJECTS} pong.o
 	${CC} ${CFLAGS} ${LDFLAGS} -o $@ $^
 
 install: pong.elf
