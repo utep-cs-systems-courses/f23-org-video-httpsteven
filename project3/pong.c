@@ -169,7 +169,7 @@ void main() {
     // did ball exit the field?
     if (ball_pos[1] <= 0 || ball_pos[1] + ball_dims[1] >= display_dims[1]) {
       clearScreen(COLOR_RED);
-      goto Top
+      goto Top;
     }
 
     // did top paddle hit the edge?
@@ -183,7 +183,6 @@ void main() {
       }
     }
   }
-}
 
 void sw0_interrupt_handler() {
   // save toggled switches and flip sensitivity
